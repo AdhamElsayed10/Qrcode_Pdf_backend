@@ -6,10 +6,17 @@ const { generateQRCode, embedQRInPDF } = require('../services/pdf.service');
 
 const prisma = new PrismaClient();
 
+// Fixed QR placement settings (X=48, Y=620, Size=50)
+const FIXED_SETTINGS = {
+  position: 'custom',
+  customX: 48,
+  customY: 620,
+  qrSize: 50,
+  pageSelection: 'all',
+};
+
 exports.uploadDocuments = async (req, res) => {
-  // req.files is a flat array from upload.array('files') — accepts any number of PDFs
   const files = req.files || [];
-  const uploadSettings = req.body || {};
 
   console.log('[Upload Controller] Files received:', files.map(f => ({
     fieldname: f.fieldname,
@@ -20,7 +27,6 @@ exports.uploadDocuments = async (req, res) => {
   })));
 
   if (files.length === 0) {
-    console.warn('[Upload Controller] No files found in request.');
     return res.status(400).json({ error: 'At least one PDF file is required.' });
   }
 
@@ -44,26 +50,12 @@ exports.uploadDocuments = async (req, res) => {
     });
 
     try {
-      // Load QR placement settings - always use fixed defaults
-      const qrSettings = await prisma.qRSettings.findFirst();
-      const settings = {
-        position: 'custom',
-        customX: qrSettings?.customX ?? 48,
-        customY: qrSettings?.customY ?? 620,
-        qrSize: qrSettings?.qrSize ?? 50,
-        pageSelection: 'all',
-      };
-
       // Generate QR code image
       const qrImagePath = await generateQRCode(qrUrl, token);
 
-// Embed QR in PDF using placement settings
-       const processedPath = await embedQRInPDF(file.path, qrImagePath, {
-        position: settings.position,
-        customX: settings.customX,
-        customY: settings.customY,
-        qrSize: settings.qrSize,
-        pageSelection: settings.pageSelection,
+      // Embed QR in PDF using fixed placement settings
+      const processedPath = await embedQRInPDF(file.path, qrImagePath, {
+        ...FIXED_SETTINGS,
         outputFilename: `processed_${token}.pdf`,
       });
 
@@ -81,7 +73,6 @@ exports.uploadDocuments = async (req, res) => {
     } catch (err) {
       console.error(`Failed to process document ${doc.title}:`, err);
 
-      // Mark as FAILED
       await prisma.document.update({
         where: { id: doc.id },
         data: { processingStatus: 'FAILED' },

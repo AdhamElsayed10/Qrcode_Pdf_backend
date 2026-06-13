@@ -37,6 +37,16 @@ app.use('/api/settings', settingsRoutes);
 // Public PDF route
 app.use('/pdf', publicRoutes);
 
+// Serve frontend static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../public')));
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/pdf')) {
+      res.sendFile(path.join(__dirname, '../public/index.html'));
+    }
+  });
+}
+
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
